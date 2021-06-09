@@ -1,5 +1,6 @@
 #CLion project files
 .idea
+.vscode
 #config file required for SDK integration tests.  Each user will configure this differently, so it is preferable that git not show this file as
 #'untracked' when printing the status. 
 Integration/AuthDelegate.config

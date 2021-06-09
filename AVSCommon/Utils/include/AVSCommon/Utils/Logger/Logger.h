@@ -356,7 +356,7 @@ inline Logger& ACSDK_GET_LOGGER_FUNCTION() {
             loggerInstance.log(level, entry);                                                         \
         }                                                                                             \
     } while (false)
-
+#define ACSDK_DEBUG_LOG_ENABLED
 #ifdef ACSDK_DEBUG_LOG_ENABLED
 
 /**

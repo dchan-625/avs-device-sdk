@@ -39,7 +39,7 @@ public:
      *
      * @return The moniker for @c std::this_thread.
      */
-    static inline std::string getThisThreadMoniker();
+    static inline const char* getThisThreadMoniker();
 
     /**
      * Generate a unique moniker.
@@ -52,7 +52,8 @@ public:
      * Set the moniker for @c std::this_thread. This method should be called before @c getThisThreadMoniker() in order
      * to take effect.
      *
-     * @param moniker The moniker for @c std::this_thread.
+     * @param moniker The moniker for @c std::this_thread. The maximum length of the moniker is 15 characters. Any
+     * characters beyond the limit will be truncated.
      */
     static inline void setThisThreadMoniker(const std::string& moniker);
 
@@ -81,10 +82,10 @@ private:
     static const ThreadMoniker& getMonikerObjectFromMap(const std::string& moniker = std::string());
 
     /// The current thread's moniker.
-    std::string m_moniker;
+    char m_moniker[16];
 };
 
-std::string ThreadMoniker::getThisThreadMoniker() {
+const char* ThreadMoniker::getThisThreadMoniker() {
     return getMonikerObject().m_moniker;
 }
 

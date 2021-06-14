@@ -51,6 +51,10 @@ public:
         return m_dialogRequestId;
     };
 
+    MOCK_METHOD0(isDialogRequestOnline, bool());
+    
+    MOCK_METHOD1(setIsDialogRequestOnline, void(bool));
+
     MOCK_METHOD1(onDirective, bool(std::shared_ptr<avsCommon::avs::AVSDirective> directive));
 
     MOCK_METHOD0(disable, void());

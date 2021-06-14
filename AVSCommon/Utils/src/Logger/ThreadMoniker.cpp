@@ -14,6 +14,7 @@
  */
 
 #include <atomic>
+#include <cstring>
 #include <iomanip>
 #include <mutex>
 #include <sstream>
@@ -30,7 +31,9 @@ namespace logger {
 /// Counter to generate (small) unique thread monikers.
 static std::atomic<int> g_nextThreadMoniker(1);
 
-ThreadMoniker::ThreadMoniker(const std::string& moniker) : m_moniker{moniker.empty() ? generateMoniker() : moniker} {
+ThreadMoniker::ThreadMoniker(const std::string& moniker) : m_moniker{} {
+    auto& m = moniker.empty() ? generateMoniker() : moniker;
+    std::strncpy(m_moniker, m.c_str(), sizeof(m_moniker) - 1);
 }
 
 std::string ThreadMoniker::generateMoniker() {

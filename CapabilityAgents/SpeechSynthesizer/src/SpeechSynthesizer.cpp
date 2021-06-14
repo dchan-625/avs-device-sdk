@@ -295,8 +295,12 @@ void SpeechSynthesizer::handleDirective(std::shared_ptr<DirectiveInfo> info) {
 }
 
 void SpeechSynthesizer::cancelDirective(std::shared_ptr<DirectiveInfo> info) {
-    ACSDK_DEBUG9(LX("cancelDirective").d("messageId", info->directive->getMessageId()));
-    m_executor.submit([this, info]() { executeCancel(info); });
+    if (info && info->directive) {
+        ACSDK_DEBUG9(LX("cancelDirective").d("messageId", info->directive->getMessageId()));
+        m_executor.submit([this, info]() { executeCancel(info); });
+    } else {
+        ACSDK_WARN(LX("cancelDirective").d("reason", "infoNotAvailable"));
+    }
 }
 
 void SpeechSynthesizer::onFocusChanged(FocusState newFocus, MixingBehavior behavior) {
@@ -1077,9 +1081,13 @@ std::string SpeechSynthesizer::buildPayload(std::string& token) {
 
 void SpeechSynthesizer::startPlaying() {
     ACSDK_DEBUG9(LX("startPlaying"));
-    std::shared_ptr<AttachmentReader> attachmentReader = std::move(m_currentInfo->attachmentReader);
-    m_mediaSourceId = m_speechPlayer->setSource(std::move(attachmentReader));
-    if (m_captionManager && m_captionManager->isEnabled() && m_currentInfo->captionData.isValid()) {
+    if (m_currentInfo && m_currentInfo->attachmentReader) {
+        std::shared_ptr<AttachmentReader> attachmentReader = std::move(m_currentInfo->attachmentReader);
+        m_mediaSourceId = m_speechPlayer->setSource(std::move(attachmentReader));
+    } else {
+        m_mediaSourceId = MediaPlayerInterface::ERROR;
+    }
+    if (m_captionManager && m_currentInfo->captionData.isValid()) {
         m_captionManager->onCaption(m_mediaSourceId, m_currentInfo->captionData);
     }
     if (MediaPlayerInterface::ERROR == m_mediaSourceId) {
@@ -1151,9 +1159,14 @@ void SpeechSynthesizer::setDesiredState(SpeechSynthesizerObserverInterface::Spee
 void SpeechSynthesizer::resetCurrentInfo(std::shared_ptr<SpeakDirectiveInfo> speakInfo) {
     if (m_currentInfo != speakInfo) {
         if (m_currentInfo) {
-            removeSpeakDirectiveInfo(m_currentInfo->directive->getMessageId());
-            removeDirective(m_currentInfo->directive->getMessageId());
-            m_currentInfo->clear();
+            auto info = m_currentInfo;
+            if (info) {
+                if (info->directive) {
+                    removeSpeakDirectiveInfo(info->directive->getMessageId());
+                    removeDirective(info->directive->getMessageId());
+                }
+                info->clear();
+            }
         }
         m_currentInfo = speakInfo;
     }

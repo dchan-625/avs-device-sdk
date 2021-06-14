@@ -107,6 +107,12 @@ DefaultEndpointBuilder& DefaultEndpointBuilder::withManufacturerName(const std::
     return *this;
 }
 
+DefaultEndpointBuilder& DefaultEndpointBuilder::withEndpointResources(const avsCommon::avs::EndpointResources& endpointResources) {
+    ACSDK_DEBUG5(LX(__func__));
+    m_builder->withEndpointResources(endpointResources);
+    return *this;
+}
+
 DefaultEndpointBuilder& DefaultEndpointBuilder::withDisplayCategory(const std::vector<std::string>& displayCategories) {
     ACSDK_DEBUG5(LX(__func__));
     m_builder->withDisplayCategory(displayCategories);

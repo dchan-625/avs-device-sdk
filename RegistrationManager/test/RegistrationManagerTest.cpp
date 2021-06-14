@@ -55,7 +55,7 @@ protected:
         m_dataManager = std::make_shared<CustomerDataManager>();
         m_dataHandler = avsCommon::utils::memory::make_unique<MockCustomerDataHandler>(m_dataManager);
         m_registrationManager.reset(
-            new RegistrationManager(m_directiveSequencer, m_avsConnectionManager, m_dataManager));
+            new RegistrationManager(m_directiveSequencer, m_avsConnectionManager, m_dataManager, nullptr));
         m_registrationObserver = std::make_shared<MockRegistrationObserver>();
         m_registrationManager->addObserver(m_registrationObserver);
     }

@@ -109,7 +109,7 @@ public:
 
     /// @name Overridden @c CallStateObserverInterface methods
     /// @{
-    void onCallStateChange(avsCommon::sdkInterfaces::CallStateObserverInterface::CallState callState) override;
+    void onCallStateChange(avsCommon::sdkInterfaces::CallStateObserverInterface::CallState callState, const avsCommon::sdkInterfaces::CallStateObserverInterface::CallDisplayInfo& displayInfo) override;
     /// @}
 
     /// @name Overridden @c DialogUXStateChanged methods.
@@ -190,7 +190,7 @@ private:
     /**
      * This function handles when the CallState has been changed.
      */
-    void executeOnCallStateChange(const avsCommon::sdkInterfaces::CallStateObserverInterface::CallState state);
+    void executeOnCallStateChange(const avsCommon::sdkInterfaces::CallStateObserverInterface::CallState state, const avsCommon::sdkInterfaces::CallStateObserverInterface::CallDisplayInfo& displayInfo);
 
     /**
      * This function handles when the DialogUXState has been changed.

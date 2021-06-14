@@ -26,6 +26,7 @@ add_library(AVSCommon SHARED
     AVS/src/ComponentConfiguration.cpp
     AVS/src/DialogUXStateAggregator.cpp
     AVS/src/DirectiveRoutingRule.cpp
+    AVS/src/EndpointResources.cpp
     AVS/src/EventBuilder.cpp
     AVS/src/ExceptionEncounteredSender.cpp
     AVS/src/CapabilityResources.cpp
@@ -59,6 +60,8 @@ add_library(AVSCommon SHARED
     Utils/src/LibcurlUtils/HTTPContentFetcherFactory.cpp
     Utils/src/LibcurlUtils/HttpPost.cpp
     Utils/src/LibcurlUtils/HttpPut.cpp
+    Utils/src/LibcurlUtils/HttpGet.cpp
+    Utils/src/LibcurlUtils/HttpDelete.cpp
     Utils/src/LibcurlUtils/HTTPResponse.cpp
     Utils/src/LibcurlUtils/LibCurlHttpContentFetcher.cpp
     Utils/src/LibcurlUtils/LibcurlHTTP2Connection.cpp

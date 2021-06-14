@@ -60,14 +60,15 @@ static const auto ASYNC_RESPONSE_TIMEOUT = std::chrono::seconds(2);
 std::shared_ptr<DiscoveryEventSender> DiscoveryEventSender::create(
     const std::unordered_map<std::string, std::string>& addOrUpdateReportEndpoints,
     const std::unordered_map<std::string, std::string>& deleteReportEndpoints,
-    const std::shared_ptr<AuthDelegateInterface>& authDelegate) {
+    const std::shared_ptr<AuthDelegateInterface>& authDelegate,
+    const std::vector<std::string>& endpointOrderList) {
     if (addOrUpdateReportEndpoints.empty() && deleteReportEndpoints.empty()) {
         ACSDK_ERROR(LX("createFailed").d("reason", "endpoint map empty"));
     } else if (!authDelegate) {
         ACSDK_ERROR(LX("createFailed").d("reason", "invalid auth delegate"));
     } else {
         auto instance = std::shared_ptr<DiscoveryEventSender>(
-            new DiscoveryEventSender(addOrUpdateReportEndpoints, deleteReportEndpoints, authDelegate));
+            new DiscoveryEventSender(addOrUpdateReportEndpoints, deleteReportEndpoints, authDelegate, endpointOrderList));
 
         return instance;
     }
@@ -77,10 +78,12 @@ std::shared_ptr<DiscoveryEventSender> DiscoveryEventSender::create(
 DiscoveryEventSender::DiscoveryEventSender(
     const std::unordered_map<std::string, std::string>& addOrUpdateReportEndpoints,
     const std::unordered_map<std::string, std::string>& deleteReportEndpoints,
-    const std::shared_ptr<AuthDelegateInterface>& authDelegate) :
+    const std::shared_ptr<AuthDelegateInterface>& authDelegate,
+    const std::vector<std::string>& endpointOrderList) :
         m_addOrUpdateReportEndpoints{addOrUpdateReportEndpoints},
         m_deleteReportEndpoints{deleteReportEndpoints},
         m_authDelegate{authDelegate},
+        m_endpointsOrderList{endpointOrderList},
         m_currentAuthState{AuthObserverInterface::State::UNINITIALIZED},
         m_isStopping{false},
         m_isSendDiscoveryEventsInvoked{false} {
@@ -313,8 +316,17 @@ bool DiscoveryEventSender::sendAddOrUpdateReportEvents(
     }
     /// Collect all endpoint configurations
     std::vector<std::string> allEndpointConfigs;
-    for (const auto& endpointIdToConfigPair : m_addOrUpdateReportEndpoints) {
-        allEndpointConfigs.push_back(endpointIdToConfigPair.second);
+    if (!m_endpointsOrderList.empty()) {
+        /// Look into the endpoints map in the order of the m_endpointsOrderList
+        for (const auto& endpointId : m_endpointsOrderList) {
+            if (m_addOrUpdateReportEndpoints.find(endpointId) != m_addOrUpdateReportEndpoints.end()) {
+                allEndpointConfigs.push_back(m_addOrUpdateReportEndpoints[endpointId]);
+            }
+        }
+    } else {
+        for (const auto& endpointIdToConfigPair : m_addOrUpdateReportEndpoints) {
+            allEndpointConfigs.push_back(endpointIdToConfigPair.second);
+        }
     }
 
     return sendDiscoveryEvents(allEndpointConfigs, messageSender, true);

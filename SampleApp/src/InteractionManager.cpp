@@ -593,7 +593,7 @@ void InteractionManager::onDialogUXStateChanged(DialogUXState state) {
     });
 }
 
-void InteractionManager::onCallStateChange(CallState state) {
+void InteractionManager::onCallStateChange(CallState state, const CallDisplayInfo& displayInfo) {
     m_executor.submit([this, state]() {
         if (CallState::CALL_CONNECTED == state) {
             if (!m_micWrapper->isStreaming()) {

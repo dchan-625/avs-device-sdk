@@ -68,6 +68,8 @@ const static std::string FRIENDLY_NAME_KEY = "friendlyName";
 const static std::string DESCRIPTION_KEY = "description";
 /// Manufacturer name key
 const static std::string MANUFACTURER_NAME_KEY = "manufacturerName";
+/// EndpointResources ID key
+const static std::string ENDPOINTRESOURCES_KEY = "endpointResources";
 /// Display Categories key
 const static std::string DISPLAY_CATEGORIES_KEY = "displayCategories";
 /// Additional Attributes key
@@ -259,14 +261,18 @@ bool validateEndpointAttributes(const AVSDiscoveryEndpointAttributes& endpointAt
         return false;
     }
 
-    if (!endpoints::isDescriptionValid(endpointAttributes.description)) {
-        ACSDK_ERROR(LX("validateEndpointAttributesFailed").d("reason", "invalidDescription"));
-        return false;
-    }
+    if (!endpoints::isEndpointResourcesValid(endpointAttributes.endpointResources)) {
 
-    if (!endpoints::isManufacturerNameValid(endpointAttributes.manufacturerName)) {
-        ACSDK_ERROR(LX("validateEndpointAttributesFailed").d("reason", "invalidManufacturerName"));
-        return false;
+    // Validate the legacy fields if the endpointResources object is invalid.
+        if (!endpoints::isDescriptionValid(endpointAttributes.description)) {
+            ACSDK_ERROR(LX("validateEndpointAttributesFailed").d("reason", "invalidDescription"));
+            return false;
+        }
+
+        if (!endpoints::isManufacturerNameValid(endpointAttributes.manufacturerName)) {
+            ACSDK_ERROR(LX("validateEndpointAttributesFailed").d("reason", "invalidManufacturerName"));
+            return false;
+        }
     }
 
     if (endpointAttributes.displayCategories.empty()) {
@@ -299,9 +305,14 @@ std::string getEndpointConfigJson(
     JsonGenerator generator;
 
     generator.addMember(ENDPOINT_ID_KEY, endpointAttributes.endpointId);
-    generator.addMember(FRIENDLY_NAME_KEY, endpointAttributes.friendlyName);
-    generator.addMember(DESCRIPTION_KEY, endpointAttributes.description);
-    generator.addMember(MANUFACTURER_NAME_KEY, endpointAttributes.manufacturerName);
+    /// Endpoint Resources.
+    if (endpointAttributes.endpointResources.isValid()) {
+        generator.addRawJsonMember(ENDPOINTRESOURCES_KEY, endpointAttributes.endpointResources.build());
+    } else {
+        generator.addMember(FRIENDLY_NAME_KEY, endpointAttributes.friendlyName);
+        generator.addMember(DESCRIPTION_KEY, endpointAttributes.description);
+        generator.addMember(MANUFACTURER_NAME_KEY, endpointAttributes.manufacturerName);
+    }
     addSortedStringArray(generator, DISPLAY_CATEGORIES_KEY, endpointAttributes.displayCategories);
 
     /// Additional Attributes Object.

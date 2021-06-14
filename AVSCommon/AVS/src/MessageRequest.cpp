@@ -89,6 +89,16 @@ std::shared_ptr<MessageRequest::NamedReader> MessageRequest::getAttachmentReader
     return m_readers[index];
 }
 
+void MessageRequest::responseStatusReceived(avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status status) {
+    std::unique_lock<std::mutex> lock{m_observerMutex};
+    auto observers = m_observers;
+    lock.unlock();
+
+    for (auto observer : observers) {
+        observer->onResponseStatusReceived(status);
+    }
+}
+
 void MessageRequest::sendCompleted(avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status status) {
     std::unique_lock<std::mutex> lock{m_observerMutex};
     auto observers = m_observers;

@@ -9,12 +9,14 @@ set(CAPABILITY_AGENTS
         "ApiGateway"
         "Equalizer"
         "InteractionModel"
+        "Messaging"
         "Notifications"
         "PlaybackController"
         "SoftwareComponentReporter"
         "SpeakerManager"
         "SpeechSynthesizer"
         "System"
+        "DeviceSetup"
         "TemplateRuntime")
 
 if (COMMS)

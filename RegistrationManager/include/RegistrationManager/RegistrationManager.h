@@ -22,6 +22,7 @@
 #include <AVSCommon/SDKInterfaces/AuthDelegateInterface.h>
 #include <AVSCommon/SDKInterfaces/AVSConnectionManagerInterface.h>
 #include <AVSCommon/SDKInterfaces/DirectiveSequencerInterface.h>
+#include <AVSCommon/Utils/Metrics/MetricRecorderInterface.h>
 
 #include "RegistrationManager/CustomerDataManager.h"
 #include "RegistrationManager/RegistrationObserverInterface.h"
@@ -43,11 +44,13 @@ public:
      * @param directiveSequencer Object used to clear directives during logout process.
      * @param connectionManager Connection manager must be disabled during customer logout.
      * @param dataManager Object that manages customer data, which must be cleared during logout.
+     * @param metricRecorder Object with which metrics are logged.
      */
     RegistrationManager(
         std::shared_ptr<avsCommon::sdkInterfaces::DirectiveSequencerInterface> directiveSequencer,
         std::shared_ptr<avsCommon::sdkInterfaces::AVSConnectionManagerInterface> connectionManager,
-        std::shared_ptr<CustomerDataManager> dataManager);
+        std::shared_ptr<CustomerDataManager> dataManager,
+        const std::shared_ptr<avsCommon::utils::metrics::MetricRecorderInterface>& metricRecorder);
 
     /**
      * RegistrationManager destructor
@@ -93,6 +96,9 @@ private:
 
     // Observers
     std::unordered_set<std::shared_ptr<RegistrationObserverInterface> > m_observers;
+
+    /// The recorder used to log metrics.
+    std::shared_ptr<avsCommon::utils::metrics::MetricRecorderInterface> m_metricRecorder;
 };
 
 }  // namespace registrationManager

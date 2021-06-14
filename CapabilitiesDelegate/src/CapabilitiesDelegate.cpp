@@ -302,6 +302,7 @@ bool CapabilitiesDelegate::addOrUpdateEndpoint(
         }
 
         m_addOrUpdateEndpoints.pending.insert(std::make_pair(endpointId, endpointConfigJson));
+        m_endpointsOrderList.push_back(endpointId);
     }
 
     if (!m_currentDiscoveryEventSender) {
@@ -465,6 +466,7 @@ std::shared_ptr<PostConnectOperationInterface> CapabilitiesDelegate::createPostC
     /// The endpoints that need to be sent to AVS.
     std::unordered_map<std::string, std::string> addOrUpdateEndpointsToSend;
     std::unordered_map<std::string, std::string> deleteEndpointsToSend;
+    std::vector<std::string> endpointOrderList;
     {
         std::lock_guard<std::mutex> lock{m_endpointsMutex};
 
@@ -512,6 +514,8 @@ std::shared_ptr<PostConnectOperationInterface> CapabilitiesDelegate::createPostC
         m_deleteEndpoints.inFlight = m_deleteEndpoints.pending;
         deleteEndpointsToSend = m_deleteEndpoints.inFlight;
         m_deleteEndpoints.pending.clear();
+
+        endpointOrderList = m_endpointsOrderList;
     }
 
     /// Sometimes pending add/update endpoints do not need to be sent to AVS as they are already stored
@@ -538,7 +542,7 @@ std::shared_ptr<PostConnectOperationInterface> CapabilitiesDelegate::createPostC
                      .d("num endpoints to delete", deleteEndpointsToSend.size()));
 
     std::shared_ptr<DiscoveryEventSenderInterface> newEventSender =
-        DiscoveryEventSender::create(addOrUpdateEndpointsToSend, deleteEndpointsToSend, m_authDelegate);
+        DiscoveryEventSender::create(addOrUpdateEndpointsToSend, deleteEndpointsToSend, m_authDelegate, endpointOrderList);
     if (!newEventSender) {
         ACSDK_ERROR(LX("createPostConnectOperationFailed").m("Could not create DiscoveryEventSender."));
         return nullptr;

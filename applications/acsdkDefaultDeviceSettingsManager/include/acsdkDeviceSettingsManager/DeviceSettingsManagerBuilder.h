@@ -25,6 +25,7 @@
 #include <AVSCommon/SDKInterfaces/LocaleAssetsManagerInterface.h>
 #include <AVSCommon/SDKInterfaces/MessageSenderInterface.h>
 #include <AVSCommon/SDKInterfaces/SystemTimeZoneInterface.h>
+#include <AVSCommon/Utils/Metrics/MetricRecorderInterface.h>
 #include <acsdkDoNotDisturb/DoNotDisturbCapabilityAgent.h>
 #include <RegistrationManager/CustomerDataManager.h>
 #include <Settings/CloudControlledSettingProtocol.h>
@@ -57,6 +58,7 @@ public:
      * DoNotDisturbSetting is managed differently than other settings in the SDK (ACSDK-2279). This is a legacy
      * anti-pattern, and other CAs should be injected with the DeviceSettingsManager (as opposed to the
      * DeviceSettingsManager being injected with the DND CA, as seen here).
+     * @param metricRecorder The @c MetricRecorderInterface instance used to log metrics.
      * @param systemTimezone Optional parameter responsible for validating / applying timezone changes system wide.
      */
     static std::shared_ptr<settings::DeviceSettingsManager> createDeviceSettingsManager(
@@ -66,6 +68,7 @@ public:
         std::shared_ptr<registrationManager::CustomerDataManager> dataManager,
         std::shared_ptr<avsCommon::sdkInterfaces::LocaleAssetsManagerInterface> localeAssetsManager,
         std::shared_ptr<capabilityAgents::doNotDisturb::DoNotDisturbCapabilityAgent> doNotDisturbCapabilityAgent,
+        const std::shared_ptr<avsCommon::utils::metrics::MetricRecorderInterface>& metricRecorder,
         std::shared_ptr<avsCommon::sdkInterfaces::SystemTimeZoneInterface> systemTimezone = nullptr);
 
     /**
@@ -75,12 +78,14 @@ public:
      * @param messageSender Sender used to send events related to this setting changes.
      * @param connectionManager The ACL connection manager.
      * @param dataManager A dataManager object that will track the CustomerDataHandler.
+     * @param metricRecorder The @c MetricRecorderInterface instance used to log metrics.
      */
     DeviceSettingsManagerBuilder(
         std::shared_ptr<settings::storage::DeviceSettingStorageInterface> settingStorage,
         std::shared_ptr<avsCommon::sdkInterfaces::MessageSenderInterface> messageSender,
         std::shared_ptr<avsCommon::sdkInterfaces::AVSConnectionManagerInterface> connectionManager,
-        std::shared_ptr<registrationManager::CustomerDataManager> dataManager);
+        std::shared_ptr<registrationManager::CustomerDataManager> dataManager,
+        const std::shared_ptr<avsCommon::utils::metrics::MetricRecorderInterface>& metricRecorder);
 
     /**
      * Configures do not disturb setting.
@@ -204,6 +209,9 @@ private:
 
     /// The dataManager object that will track the CustomerDataHandler.
     std::shared_ptr<registrationManager::CustomerDataManager> m_dataManager;
+
+    /// The Metric Recorder object to log metrics.
+    std::shared_ptr<avsCommon::utils::metrics::MetricRecorderInterface> m_metricRecorder;
 
     /// Flag that indicates if there was any configuration error.
     bool m_foundError;

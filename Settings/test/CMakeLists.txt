@@ -12,6 +12,7 @@ if (BUILD_TESTING)
         "${AVSCommon_SOURCE_DIR}/AVS/test"
         "${AVSCommon_SOURCE_DIR}/Utils/include"
         "${AVSCommon_SOURCE_DIR}/SDKInterfaces/test"
+        "${AVSCommon_SOURCE_DIR}/Utils/test"
         "${CertifiedSender_SOURCE_DIR}/test")
 
     set(TEST_FOLDER "${DeviceSettings_SOURCE_DIR}/test")

@@ -422,7 +422,7 @@ public:
     /**
      * CallStateObserverInterface methods
      */
-    void onCallStateChange(CallState newState) override;
+    void onCallStateChange(CallState newState, const CallDisplayInfo& displayInfo) override;
 
 #ifdef ENABLE_PCC
     /**

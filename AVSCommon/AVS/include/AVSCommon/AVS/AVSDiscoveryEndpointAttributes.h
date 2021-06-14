@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include <AVSCommon/AVS/EndpointResources.h>
 #include <AVSCommon/SDKInterfaces/Endpoints/EndpointIdentifier.h>
 #include <AVSCommon/Utils/Optional.h>
 
@@ -122,6 +123,9 @@ struct AVSDiscoveryEndpointAttributes {
 
     /// A non-empty string identifying the endpoint manufacturer name.
     std::string manufacturerName;
+
+    /// An EndpointResources object containing friendly names, manufacturer name and description.
+    EndpointResources endpointResources;
 
     /// The display categories the device belongs to. This field should contain at least one category. See categories
     /// in this document: https://developer.amazon.com/docs/alexa/device-apis/alexa-discovery.html#display-categories

@@ -56,8 +56,8 @@ static const std::string TAG("EndpointBuilder");
 /// String used to join attributes in the generation of the derived endpoint id.
 const std::string ENDPOINT_ID_CONCAT = "::";
 
-/// We will limit the suffix length to 10 characters for now to ensure that we don't go over the endpointId length.
-static constexpr size_t MAX_SUFFIX_LENGTH = 10;
+/// We will limit the EndpointId length to 256 characters
+static constexpr size_t MAX_ENDPOINTID_LENGTH = 256;
 
 /// The display category for the AVS device endpoint;
 const std::string ALEXA_DISPLAY_CATEGORY = "ALEXA_VOICE_ENABLED";
@@ -110,6 +110,7 @@ EndpointBuilder::EndpointBuilder(
         m_hasBeenBuilt{false},
         m_invalidConfiguration{false},
         m_isDefaultEndpoint{false},
+        m_isEndpointResourcesUsed{false},
         m_deviceInfo{deviceInfo},
         m_contextManager{contextManager},
         m_exceptionSender{exceptionSender},
@@ -146,12 +147,15 @@ EndpointBuilder& EndpointBuilder::withDerivedEndpointId(const std::string& suffi
         return *this;
     }
 
-    if (suffix.length() > MAX_SUFFIX_LENGTH) {
-        ACSDK_ERROR(LX(std::string(__func__) + "Failed").d("reason", "suffixMaxLengthExceeded").d("suffix", suffix));
+    std::string fullEndpointId = m_deviceInfo->getDefaultEndpointId() + ENDPOINT_ID_CONCAT + suffix;
+    if (fullEndpointId.length() > MAX_ENDPOINTID_LENGTH) {
+        ACSDK_ERROR(LX(std::string(__func__) + "Failed")
+                        .d("reason", "EndpointIdMaxLengthExceeded")
+                        .sensitive("fullEndpointId", fullEndpointId));
         return *this;
     }
 
-    m_attributes.endpointId = m_deviceInfo->getDefaultEndpointId() + ENDPOINT_ID_CONCAT + suffix;
+    m_attributes.endpointId = fullEndpointId;
     return *this;
 }
 
@@ -174,6 +178,18 @@ EndpointBuilder& EndpointBuilder::withEndpointId(const EndpointIdentifier& endpo
 void EndpointBuilder::finalizeAttributes() {
     ACSDK_DEBUG5(LX(__func__));
     m_isConfigurationFinalized = true;
+}
+
+EndpointBuilder& EndpointBuilder::withEndpointResources(
+        const avsCommon::avs::EndpointResources& endpointResources) {
+    m_isEndpointResourcesUsed = true;
+    if (!isEndpointResourcesValid(endpointResources)){
+        ACSDK_ERROR(LX(__func__).d("reason", "invalidEndpointResources"));
+        m_invalidConfiguration = true;
+        return *this;
+    }
+    m_attributes.endpointResources = endpointResources;
+    return *this;
 }
 
 EndpointBuilder& EndpointBuilder::withFriendlyName(const std::string& friendlyName) {
@@ -537,7 +553,14 @@ std::unique_ptr<EndpointInterface> EndpointBuilder::buildImplementation() {
         return nullptr;
     }
 
-    if (!m_isDefaultEndpoint && !isFriendlyNameValid(m_attributes.friendlyName)) {
+    if (!m_isDefaultEndpoint && m_isEndpointResourcesUsed
+                             && !isEndpointResourcesValid(m_attributes.endpointResources)) {
+        ACSDK_ERROR(LX("buildFailed").d("reason", "invalidEndpointResources"));
+        return nullptr;
+    }
+
+    if (!m_isDefaultEndpoint && !m_isEndpointResourcesUsed
+                             && !isFriendlyNameValid(m_attributes.friendlyName)) {
         ACSDK_ERROR(
             LX("buildFailed").d("reason", "friendlyNameInvalid").sensitive("friendlyName", m_attributes.friendlyName));
         return nullptr;

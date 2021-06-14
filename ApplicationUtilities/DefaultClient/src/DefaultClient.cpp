@@ -654,13 +654,9 @@ bool DefaultClient::initialize(
         m_connectionManager->addConnectionStatusObserver(observer);
     }
 
-    m_connectionManager->addMessageObserver(m_dialogUXStateAggregator);
-
     for (auto observer : alexaDialogStateObservers) {
         m_dialogUXStateAggregator->addObserver(observer);
     }
-
-    m_connectionManager->addMessageObserver(m_dialogUXStateAggregator);
 
     /*
      * Creating the Directive Sequencer - This is the component that deals with
@@ -692,7 +688,7 @@ bool DefaultClient::initialize(
      * operation such as login and logout
      */
     m_registrationManager = std::make_shared<registrationManager::RegistrationManager>(
-        m_directiveSequencer, m_connectionManager, customerDataManager);
+        m_directiveSequencer, m_connectionManager, customerDataManager, metricRecorder);
 
     // Create endpoint related objects.
     m_capabilitiesDelegate->setMessageSender(m_connectionManager);

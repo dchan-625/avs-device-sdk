@@ -19,10 +19,12 @@
 #include <memory>
 #include <string>
 
+#include <acsdkManufactory/Annotated.h>
 #include <Alexa/AlexaInterfaceMessageSender.h>
 #include <Alexa/AlexaInterfaceMessageSenderInternalInterface.h>
 #include <AVSCommon/AVS/AVSDiscoveryEndpointAttributes.h>
 #include <AVSCommon/SDKInterfaces/AlexaInterfaceMessageSenderInterface.h>
+#include "AVSCommon/SDKInterfaces/Endpoints/DefaultEndpointAnnotation.h"
 #include <AVSCommon/SDKInterfaces/Endpoints/EndpointBuilderInterface.h>
 #include <AVSCommon/SDKInterfaces/Endpoints/EndpointInterface.h>
 #include <AVSCommon/SDKInterfaces/Endpoints/EndpointRegistrationManagerInterface.h>
@@ -99,6 +101,7 @@ public:
     DefaultEndpointBuilder& withFriendlyName(const std::string& friendlyName) override;
     DefaultEndpointBuilder& withDescription(const std::string& description) override;
     DefaultEndpointBuilder& withManufacturerName(const std::string& manufacturerName) override;
+    DefaultEndpointBuilder& withEndpointResources(const avsCommon::avs::EndpointResources& endpointResources) override;
     DefaultEndpointBuilder& withDisplayCategory(const std::vector<std::string>& displayCategories) override;
     DefaultEndpointBuilder& withAdditionalAttributes(
         const std::string& manufacturer,

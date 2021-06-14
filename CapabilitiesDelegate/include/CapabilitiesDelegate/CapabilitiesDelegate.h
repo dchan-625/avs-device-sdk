@@ -317,6 +317,9 @@ private:
     /// A struct containing the in-flight and pending endpoints for Discovery.addOrUpdateReport event.
     InProcessEndpointsToConfigMapStruct m_addOrUpdateEndpoints;
 
+    /// A list that preserves the endpointId order.
+    std::vector<std::string> m_endpointsOrderList;
+
     /// A struct containing the in-flight and pending endpoints Discovery.deleteReport event.
     InProcessEndpointsToConfigMapStruct m_deleteEndpoints;
 

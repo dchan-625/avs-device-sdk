@@ -58,6 +58,10 @@ public:
 
     std::string getDialogRequestId() override;
 
+    void setIsDialogRequestOnline(bool isOnline) override;
+
+    bool isDialogRequestOnline() override;
+
     bool onDirective(std::shared_ptr<avsCommon::avs::AVSDirective> directive) override;
 
     void disable() override;

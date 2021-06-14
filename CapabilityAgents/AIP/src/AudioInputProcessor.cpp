@@ -210,6 +210,13 @@ static const std::string STOP_CAPTURE_TO_END_OF_SPEECH_METRIC_NAME = "STOP_CAPTU
 static const std::string STOP_CAPTURE_TO_END_OF_SPEECH_ACTIVITY_NAME =
     METRIC_ACTIVITY_NAME_PREFIX_AIP + STOP_CAPTURE_TO_END_OF_SPEECH_METRIC_NAME;
 
+/// The recognize request initiator metric.
+static const std::string INITIATOR_PREFIX = "INITIATOR_";
+static const std::string INITIATOR_ACTIVITY_NAME_PREFIX = METRIC_ACTIVITY_NAME_PREFIX_AIP + INITIATOR_PREFIX;
+
+/// The default resolveKey used as a placeholder when only one encoding format is configured for @c AudioInputProcessor
+static const std::string DEFAULT_RESOLVE_KEY = "DEFAULT_RESOLVE_KEY";
+
 /// Preroll duration is a fixed 500ms.
 static const std::chrono::milliseconds PREROLL_DURATION = std::chrono::milliseconds(500);
 
@@ -451,6 +458,7 @@ std::future<bool> AudioInputProcessor::stopCapture() {
 }
 
 std::future<void> AudioInputProcessor::resetState() {
+    ACSDK_DEBUG0(LX(__func__));
     return m_executor.submit([this]() { executeResetState(); });
 }
 
@@ -751,7 +759,8 @@ bool AudioInputProcessor::executeRecognize(
 
     // If we will be enabling false wakeword detection, add preroll and build the initiator payload.
     json::JsonGenerator generator;
-    generator.addMember(TYPE_KEY, initiatorToString(initiator));
+    std::string initiatorString = initiatorToString(initiator);
+    generator.addMember(TYPE_KEY, initiatorString);
     generator.startObject(PAYLOAD_KEY);
     // If we will be enabling false wakeword detection, add preroll and build the initiator payload.
     if (falseWakewordDetection) {
@@ -782,7 +791,8 @@ bool AudioInputProcessor::executeRecognize(
         keyword,
         KWDMetadata,
         initiatedByWakeword,
-        falseWakewordDetection);
+        falseWakewordDetection,
+        initiatorString);
 }
 
 bool AudioInputProcessor::executeRecognize(
@@ -794,7 +804,8 @@ bool AudioInputProcessor::executeRecognize(
     const std::string& keyword,
     std::shared_ptr<const std::vector<char>> KWDMetadata,
     bool initiatedByWakeword,
-    bool falseWakewordDetection) {
+    bool falseWakewordDetection,
+    const std::string& initiatorString) {
     if (!provider.stream) {
         ACSDK_ERROR(LX("executeRecognizeFailed").d("reason", "nullAudioInputStream"));
         return false;
@@ -983,6 +994,17 @@ bool AudioInputProcessor::executeRecognize(
                               .build())
             .addDataPoint(DataPointCounterBuilder{}.setName(START_OF_UTTERANCE).increment(1).build()),
         m_preCachedDialogRequestId);
+
+    /// Submit initiator metric if available.
+    if (!initiatorString.empty()) {
+        submitMetric(
+            m_metricRecorder,
+            MetricEventBuilder{}
+                .setActivityName(INITIATOR_ACTIVITY_NAME_PREFIX + initiatorString)
+                .addDataPoint(
+                    DataPointCounterBuilder{}.setName(INITIATOR_PREFIX + initiatorString).increment(1).build()),
+            m_preCachedDialogRequestId);
+    }
 
     if (initiatedByWakeword) {
         auto duration = milliseconds((end - begin) * MILLISECONDS_PER_SECOND / provider.format.sampleRateHz);
@@ -1281,6 +1303,8 @@ bool AudioInputProcessor::executeExpectSpeechTimedOut() {
 }
 
 void AudioInputProcessor::executeOnDialogUXStateChanged(DialogUXStateObserverInterface::DialogUXState newState) {
+    ACSDK_DEBUG0(LX(__func__).d("newState", newState));
+
     if (!m_initialDialogUXStateReceived) {
         // The initial dialog UX state change call comes from simply registering as an observer; it is not a deliberate
         // change to the dialog state which should interrupt a recognize event.
@@ -1342,6 +1366,17 @@ void AudioInputProcessor::sendRequestNow() {
     }
 }
 
+void AudioInputProcessor::onResponseStatusReceived(
+    avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status status) {
+    ACSDK_DEBUG(LX("onResponseStatusReceived").d("status", status));
+    if (status == MessageRequestObserverInterface::Status::SUCCESS ||
+        status == MessageRequestObserverInterface::Status::PENDING) {
+        stopCapture();
+    } else {
+        resetState();
+    }
+}
+
 void AudioInputProcessor::onExceptionReceived(const std::string& exceptionMessage) {
     ACSDK_ERROR(LX("onExceptionReceived").d("exception", exceptionMessage));
     resetState();
@@ -1349,16 +1384,6 @@ void AudioInputProcessor::onExceptionReceived(const std::string& exceptionMessag
 
 void AudioInputProcessor::onSendCompleted(MessageRequestObserverInterface::Status status) {
     ACSDK_DEBUG(LX("onSendCompleted").d("status", status));
-
-    if (status == MessageRequestObserverInterface::Status::SUCCESS ||
-        status == MessageRequestObserverInterface::Status::PENDING) {
-        // Stop listening from audio input source when the recognize event steam is closed.
-        ACSDK_DEBUG5(LX("stopCapture").d("reason", "streamClosed"));
-        stopCapture();
-
-        return;
-    }
-    ACSDK_DEBUG(LX("resetState").d("dueToStatus", status));
     resetState();
 }
 

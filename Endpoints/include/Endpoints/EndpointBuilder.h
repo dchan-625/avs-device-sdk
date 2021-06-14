@@ -103,6 +103,8 @@ public:
     EndpointBuilder& withFriendlyName(const std::string& friendlyName) override;
     EndpointBuilder& withDescription(const std::string& description) override;
     EndpointBuilder& withManufacturerName(const std::string& manufacturerName) override;
+    EndpointBuilder& withEndpointResources(
+            const avsCommon::avs::EndpointResources& endpointResources) override;
     EndpointBuilder& withDisplayCategory(const std::vector<std::string>& displayCategories) override;
     EndpointBuilder& withAdditionalAttributes(
         const std::string& manufacturer,
@@ -207,6 +209,9 @@ private:
     /// Flag used to indicate whether the builder is building the default endpoint, as some validation
     /// rules apply differently.
     bool m_isDefaultEndpoint;
+
+    /// Flag used to indicate whether endpointResources is used.
+    bool m_isEndpointResourcesUsed;
 
     /// The client endpoint id that is used to build the default endpoint and generate derived endpoints.
     std::shared_ptr<avsCommon::utils::DeviceInfo> m_deviceInfo;

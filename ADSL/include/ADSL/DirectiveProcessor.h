@@ -83,7 +83,7 @@ public:
      * @param dialogRequestId The new value for the current @c dialogRequestId.
      */
     void setDialogRequestId(const std::string& dialogRequestId);
-
+   
     /**
      * Returns the @c dialogRequestId currently in use for Directive handling. This may be the empty string if
      * Directives have either experienced errors, or have been cancelled.
@@ -91,6 +91,10 @@ public:
      * @return dialogRequestId  The current dialog request id.
      */
     std::string getDialogRequestId();
+
+    void setIsDialogRequestOnline(bool isOnline);
+
+    bool isDialogRequestOnline();
 
     /**
      * Queue an @c AVSDirective for handling by whatever @c DirectiveHandler was registered to handle it.
@@ -194,6 +198,12 @@ private:
      */
     void processingLoop();
 
+    void setIsDialogRequestOnlineLocked(bool isOnline);
+
+    bool isDialogRequestOnlineLocked();
+
+    std::string getDialogRequestIdLocked();
+
     /**
      * Process (cancel) all the items in @c m_cancelingQueue.
      * @note This method must only be called by threads that have acquired @c m_mutex.
@@ -294,6 +304,9 @@ private:
 
     /// Whether or not the @c DirectiveProcessor is enabled.
     bool m_isEnabled;
+
+    /// Whether the current dialog request is from AVS (online) or AHE (offline)
+    bool m_isDialogRequestOnline;
 
     /// The current @c dialogRequestId
     std::string m_dialogRequestId;

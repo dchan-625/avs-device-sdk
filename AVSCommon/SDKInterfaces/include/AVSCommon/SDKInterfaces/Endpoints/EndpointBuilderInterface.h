@@ -19,10 +19,12 @@
 #include <memory>
 #include <string>
 
+#include "AVSCommon/AVS/EndpointResources.h"
 #include "AVSCommon/SDKInterfaces/CapabilityConfigurationInterface.h"
 #include "AVSCommon/SDKInterfaces/DirectiveHandlerInterface.h"
 #include "AVSCommon/SDKInterfaces/Endpoints/EndpointCapabilitiesBuilderInterface.h"
 #include "AVSCommon/SDKInterfaces/Endpoints/EndpointCapabilitiesRegistrarInterface.h"
+#include "AVSCommon/SDKInterfaces/Endpoints/EndpointIdentifier.h"
 #include "AVSCommon/SDKInterfaces/Endpoints/EndpointInterface.h"
 #include "AVSCommon/SDKInterfaces/ModeController/ModeControllerAttributes.h"
 #include "AVSCommon/SDKInterfaces/ModeController/ModeControllerInterface.h"
@@ -136,10 +138,24 @@ public:
      * @note This value can contain up to 128 characters.
      * @note The builder will fail if the manufacturer name param is invalid.
      *
-     * @param description The manufacturer name of the device representing the endpoint.
+     * @param manufacturerName The manufacturer name of the device representing the endpoint.
      * @return This builder which can be used to nest configuration function calls.
      */
     virtual EndpointBuilderInterface& withManufacturerName(const std::string& manufacturerName) = 0;
+
+    /**
+     * Configures builder to use endpointResources representing the endpoint.
+     *
+     * @note EndpointResources contains friendlyNames, manufacturer name and description.
+     * @note Use either withFriendlyName, withDescription, withManufacturerName to build or withEndpointResources
+     * to build. 
+     * @note The builder will fail if the endpointResources param is invalid.
+     *
+     * @param endpointResources The endpointResources of the device representing the endpoint.
+     * @return This builder which can be used to nest configuration function calls.
+     */
+    virtual EndpointBuilderInterface& withEndpointResources(
+            const avsCommon::avs::EndpointResources& endpointResources) = 0;
 
     /**
      * Configures builder to use the following display categories.
@@ -147,7 +163,7 @@ public:
      * @note This will override any previous display categories configuration.
      * @note The builder will fail if the displayCategories param is invalid.
      *
-     * @param description The display category the device belongs to.
+     * @param displayCategories The display category the device belongs to.
      * @return This builder which can be used to nest configuration function calls.
      */
     virtual EndpointBuilderInterface& withDisplayCategory(const std::vector<std::string>& displayCategories) = 0;

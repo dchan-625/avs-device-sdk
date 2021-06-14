@@ -29,6 +29,10 @@ bool isEndpointIdValid(const EndpointIdentifier& identifier) {
     return (length > 0) && (length <= AVSDiscoveryEndpointAttributes::MAX_ENDPOINT_IDENTIFIER_LENGTH);
 }
 
+bool isEndpointResourcesValid(const EndpointResources& endpointResources) {
+    return endpointResources.isValid();
+}
+
 bool isFriendlyNameValid(const std::string& name) {
     auto length = name.length();
     return (length > 0) && (length <= AVSDiscoveryEndpointAttributes::MAX_FRIENDLY_NAME_LENGTH);

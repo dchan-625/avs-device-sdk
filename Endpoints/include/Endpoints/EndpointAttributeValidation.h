@@ -35,6 +35,14 @@ namespace endpoints {
 bool isEndpointIdValid(const avsCommon::sdkInterfaces::endpoints::EndpointIdentifier& identifier);
 
 /**
+ * Returns whether the given endpointResources follows AVS specification.
+ *
+ * @param endpointResources The endpointResources to be validated.
+ * @return @c true if valid; otherwise, return @c false.
+ */
+bool isEndpointResourcesValid(const avsCommon::avs::EndpointResources& endpointResources);
+
+/**
  * Returns whether the given name follows AVS specification.
  *
  * @see https://developer.amazon.com/docs/alexa/alexa-voice-service/alexa-discovery.html#addorupdatereport

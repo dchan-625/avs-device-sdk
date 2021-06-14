@@ -50,10 +50,10 @@ using namespace ::testing;
 static std::chrono::milliseconds TIMEOUT(1000);
 
 /// Timeout when waiting for clearTemplateCard.
-static std::chrono::milliseconds TEMPLATE_TIMEOUT(5000);
+static std::chrono::milliseconds TEMPLATE_TIMEOUT(11000);
 
 /// Timeout when waiting for clearTemplateCard not called.
-static std::chrono::milliseconds TEMPLATE_NOT_CLEAR_TIMEOUT(2500);
+static std::chrono::milliseconds TEMPLATE_NOT_CLEAR_TIMEOUT(8500);
 
 /// Timeout when waiting for clearTemplateCard.
 static std::chrono::milliseconds PLAYER_FINISHED_TIMEOUT(5000);
@@ -415,7 +415,7 @@ TEST_F(TemplateRuntimeTest, test_unknownDirective) {
 
 /**
  * Tests RenderTemplate Directive. Expect that the renderTemplateCard callback will be called and clearTemplateCard will
- * be called after 2s after DialogUXState is changed to IDLE state.
+ * be called after 8s after DialogUXState is changed to IDLE state.
  */
 TEST_F(TemplateRuntimeTest, testSlow_renderTemplateDirective) {
     // Create Directive.

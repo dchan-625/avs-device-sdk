@@ -255,6 +255,7 @@ public:
 
     /// @name MessageRequestObserverInterface Functions
     /// @{
+    void onResponseStatusReceived(avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status status) override;
     void onSendCompleted(avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status status) override;
     void onExceptionReceived(const std::string& exceptionMessage) override;
     /// @}
@@ -469,6 +470,7 @@ private:
      * @param KWDMetadata Wake word engine metadata.
      * @param initiatedByWakeword Whether the Initiator was Wakeword; false by default.
      * @param falseWakewordDetection Whether false Wakeword detection was enabled; false by default.
+     * @param initiatorString - The @c Initiator string to be used to log a metric.
      * @return @c true if the Recognize Event was started successfully, else @c false.
      */
     bool executeRecognize(
@@ -480,7 +482,8 @@ private:
         const std::string& keyword = "",
         std::shared_ptr<const std::vector<char>> KWDMetadata = nullptr,
         bool initiatedByWakeword = false,
-        bool falseWakewordDetection = false);
+        bool falseWakewordDetection = false,
+        const std::string& initiatorString = "");
 
     /**
      * This function receives the full system context from @c ContextManager.  Context requests are initiated by

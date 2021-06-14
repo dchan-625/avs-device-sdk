@@ -616,7 +616,7 @@ TestDialogUXStateObserver::TestDialogUXStateObserver(
 
 void TestDialogUXStateObserver::onDialogUXStateChanged(DialogUXState newState) {
     if (DialogUXState::THINKING == newState) {
-        m_aggregator->receive("", "");
+        m_aggregator->onRequestProcessingCompleted();
     }
 }
 
@@ -654,8 +654,10 @@ protected:
     /// Enumerates the different points when to pass a stop capture directive to AIP via @c
     /// AudioInputProcessor::handleDirectiveImmediately())
     enum class StopCaptureDirectiveSchedule {
-        /// Pass a stop capture directive to AIP before the event stream is closed.
-        BEFORE_EVENT_STREAM_CLOSE,
+        /// Pass a stop capture directive to AIP before the response code to the Recognize request is receeived.
+        BEFORE_RESPONSE_STATUS_RECEIVED,
+        /// Pass a stop capture directive to AIP after the response ccode to the Recognize requet is received.
+        AFTER_RESPONSE_CODE_RECEIVED,
         /// Pass a stop capture directive after the event stream is closed.
         AFTER_EVENT_STREAM_CLOSE,
         /// Do not pass a stop capture directive.
@@ -829,21 +831,23 @@ protected:
      */
     bool testFocusChange(avsCommon::avs::FocusState state, avsCommon::avs::MixingBehavior behavior);
 
-    /**
-     * Performs a test to check the AIP correctly transitions to a state after getting notified that the recognize event
-     * stream has been closed and/or receiving a stop capture directive.
-     *
-     * @param eventStreamFinishedStatus The status of the recognize event stream when the stream closes.
-     * @param stopCaptureSchedule Specify the point when to pass a stop capture directive to AIP.
-     * @param expectedAIPFinalState The expected final state of the AIP.
-     * @param expectFocusReleased If true, it is expected that AIP will release the channel focus in the final state,
-     * and false otherwise.
-     */
-    void testAIPStateTransitionOnEventFinish(
-        avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status eventStreamFinishedStatus,
+     /**
+      * Performs a test to check the AIP correctly transitions to a state after getting notified of the
+      * response to the recognize event and/or receiving a stop capture directive.
+      *
+      * @param responseStatus The response status for the recognize request.
+      * @param stopCaptureSchedule Specify the point when to pass a stop capture directive to AIP.
+      * @param expectedAIPFinalState The expected final state of the AIP.
+      * @param expectFocusReleased If true, it is expected that AIP will release the channel focus in the final state,
+      * and false otherwise.
+      * @param closeRequest Whether onSendCompleted() should be called to simulate a stream close.
+      */
+    void testAIPStateTransitionOnEventResponse(
+        avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status responseStatus,
         StopCaptureDirectiveSchedule stopCaptureSchedule,
         AudioInputProcessorObserverInterface::State expectedAIPFinalState,
-        bool expectFocusReleased);
+        bool expectFocusReleased,
+        bool closeRequest = true);
 
     /// The metric recorder.
     std::shared_ptr<avsCommon::utils::metrics::MetricRecorderInterface> m_metricRecorder;
@@ -1651,11 +1655,12 @@ bool AudioInputProcessorTest::testFocusChange(
     return conditionVariable.wait_for(lock, TEST_TIMEOUT, [&done] { return done; });
 }
 
-void AudioInputProcessorTest::testAIPStateTransitionOnEventFinish(
-    avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status eventStreamFinishedStatus,
+void AudioInputProcessorTest::testAIPStateTransitionOnEventResponse(
+    MessageRequestObserverInterface::Status responseStatus,
     StopCaptureDirectiveSchedule stopCaptureSchedule,
     AudioInputProcessorObserverInterface::State expectedAIPFinalState,
-    bool expectFocusReleased) {
+    bool expectFocusReleased,
+    bool closeRequest) {
     // Simulate tap to talk and start recognizing.
     ASSERT_TRUE(testRecognizeSucceeds(*m_audioProvider, Initiator::TAP, 0));
 
@@ -1671,11 +1676,22 @@ void AudioInputProcessorTest::testAIPStateTransitionOnEventFinish(
 
     auto avsDirective = createAVSDirective(STOP_CAPTURE, true);
 
-    if (StopCaptureDirectiveSchedule::BEFORE_EVENT_STREAM_CLOSE == stopCaptureSchedule) {
+    if (StopCaptureDirectiveSchedule::BEFORE_RESPONSE_STATUS_RECEIVED == stopCaptureSchedule) {
         m_audioInputProcessor->handleDirectiveImmediately(avsDirective);
     }
 
-    m_audioInputProcessor->onSendCompleted(eventStreamFinishedStatus);
+    if (MessageRequestObserverInterface::Status::TIMEDOUT != responseStatus &&
+        MessageRequestObserverInterface::Status::CANCELED != responseStatus) {
+        m_audioInputProcessor->onResponseStatusReceived(responseStatus);
+    }
+
+    if (StopCaptureDirectiveSchedule::AFTER_RESPONSE_CODE_RECEIVED == stopCaptureSchedule) {
+        m_audioInputProcessor->handleDirectiveImmediately(avsDirective);
+    }
+
+    if (closeRequest) {
+        m_audioInputProcessor->onSendCompleted(responseStatus);
+    }
 
     if (StopCaptureDirectiveSchedule::AFTER_EVENT_STREAM_CLOSE == stopCaptureSchedule) {
         m_audioInputProcessor->handleDirectiveImmediately(avsDirective);
@@ -2536,14 +2552,40 @@ TEST_F(AudioInputProcessorTest, test_recognizeInvalidWakeWord) {
 }
 
 /**
+ * This function verifies that @c AudioInputProcessor state will stop listening when the recognize event stream
+ * has received SUCCESS but not yet closed.
+ */
+TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamSuccessBeforeClose) {
+    testAIPStateTransitionOnEventResponse(
+        avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::SUCCESS,
+        StopCaptureDirectiveSchedule::NONE,
+        AudioInputProcessorObserverInterface::State::BUSY,
+        false,
+        false);
+}
+
+/**
  * This function verifies that @c AudioInputProcessor state will stop listening when the recognize event stream has been
  * successfully sent.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamSuccess) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::SUCCESS,
         StopCaptureDirectiveSchedule::NONE,
-        AudioInputProcessorObserverInterface::State::BUSY,
+        AudioInputProcessorObserverInterface::State::IDLE,
+        true);
+}
+
+/**
+ * This function verifies that @c AudioInputProcessor state will stop listening when the recognize event stream
+ * has received SUCCESS_NO_CONTENT but the stream has not yet closed.
+ */
+TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamSuccessNoContentBeforeClose) {
+    testAIPStateTransitionOnEventResponse(
+        avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::SUCCESS_NO_CONTENT,
+        StopCaptureDirectiveSchedule::NONE,
+        AudioInputProcessorObserverInterface::State::IDLE,
+        false,
         false);
 }
 
@@ -2552,7 +2594,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamSuccess) {
  * successfully sent but received no HTTP/2 content.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamSuccessNoContent) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::SUCCESS_NO_CONTENT,
         StopCaptureDirectiveSchedule::NONE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2564,7 +2606,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamSuccessNoContent) {
  * been sent due to connection to AVS has been severed.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamSuccessNotConnected) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::NOT_CONNECTED,
         StopCaptureDirectiveSchedule::NONE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2576,7 +2618,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamSuccessNotConnected) {
  * been sent due to AVS is not synchronized.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamNotSynchronized) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::NOT_SYNCHRONIZED,
         StopCaptureDirectiveSchedule::NONE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2588,7 +2630,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamNotSynchronized) {
  * been sent due to an internal error within ACL.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamInternalrror) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::INTERNAL_ERROR,
         StopCaptureDirectiveSchedule::NONE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2600,7 +2642,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamInternalrror) {
  * been sent due to an underlying protocol error.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamProtocolError) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::PROTOCOL_ERROR,
         StopCaptureDirectiveSchedule::NONE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2612,7 +2654,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamProtocolError) {
  * been sent due to an internal error on the server which sends code 500.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamServerInternalError) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::SERVER_INTERNAL_ERROR_V2,
         StopCaptureDirectiveSchedule::NONE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2624,7 +2666,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamServerInternalError) {
  * been sent due to server refusing the request.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamRefused) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::REFUSED,
         StopCaptureDirectiveSchedule::NONE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2636,7 +2678,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamRefused) {
  * been sent due to server canceling it before the transmission completed.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamCanceled) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::CANCELED,
         StopCaptureDirectiveSchedule::NONE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2648,7 +2690,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamCanceled) {
  * been sent due to excessive load on the server.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamThrottled) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::THROTTLED,
         StopCaptureDirectiveSchedule::NONE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2660,7 +2702,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamThrottled) {
  * been sent due to the access credentials provided to ACL were invalid.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamInvalidAuth) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::INVALID_AUTH,
         StopCaptureDirectiveSchedule::NONE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2672,7 +2714,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamInvalidAuth) {
  * been sent due to invalid request sent by the user.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamBadRequest) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::BAD_REQUEST,
         StopCaptureDirectiveSchedule::NONE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2684,7 +2726,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamBadRequest) {
  * been sent due to unknown server error.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamUnknownServerError) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::SERVER_OTHER_ERROR,
         StopCaptureDirectiveSchedule::NONE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2696,9 +2738,9 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamUnknownServerError) {
  * recognize event stream has been successfully sent.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamSuccess) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::SUCCESS,
-        StopCaptureDirectiveSchedule::BEFORE_EVENT_STREAM_CLOSE,
+        StopCaptureDirectiveSchedule::BEFORE_RESPONSE_STATUS_RECEIVED,
         AudioInputProcessorObserverInterface::State::BUSY,
         false);
 }
@@ -2708,9 +2750,9 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamSuccess) {
  * recognize event stream has been successfully sent but received no HTTP/2 content.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamSuccessNoContent) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::SUCCESS_NO_CONTENT,
-        StopCaptureDirectiveSchedule::BEFORE_EVENT_STREAM_CLOSE,
+        StopCaptureDirectiveSchedule::BEFORE_RESPONSE_STATUS_RECEIVED,
         AudioInputProcessorObserverInterface::State::BUSY,
         false);
 }
@@ -2720,9 +2762,9 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamSuccessNoCon
  * recognize event stream has not been sent due to connection to AVS has been severed.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamSuccessNotConnected) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::NOT_CONNECTED,
-        StopCaptureDirectiveSchedule::BEFORE_EVENT_STREAM_CLOSE,
+        StopCaptureDirectiveSchedule::BEFORE_RESPONSE_STATUS_RECEIVED,
         AudioInputProcessorObserverInterface::State::IDLE,
         true);
 }
@@ -2732,9 +2774,9 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamSuccessNotCo
  * recognize event stream has not been sent due to AVS is not synchronized.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamNotSynchronized) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::NOT_SYNCHRONIZED,
-        StopCaptureDirectiveSchedule::BEFORE_EVENT_STREAM_CLOSE,
+        StopCaptureDirectiveSchedule::BEFORE_RESPONSE_STATUS_RECEIVED,
         AudioInputProcessorObserverInterface::State::IDLE,
         true);
 }
@@ -2744,9 +2786,9 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamNotSynchroni
  * recognize event stream has not been sent due to an internal error within ACL.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamInternalrror) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::INTERNAL_ERROR,
-        StopCaptureDirectiveSchedule::BEFORE_EVENT_STREAM_CLOSE,
+        StopCaptureDirectiveSchedule::BEFORE_RESPONSE_STATUS_RECEIVED,
         AudioInputProcessorObserverInterface::State::IDLE,
         true);
 }
@@ -2756,9 +2798,9 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamInternalrror
  * recognize event stream has not been sent due to an underlying protocol error.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamProtocolError) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::PROTOCOL_ERROR,
-        StopCaptureDirectiveSchedule::BEFORE_EVENT_STREAM_CLOSE,
+        StopCaptureDirectiveSchedule::BEFORE_RESPONSE_STATUS_RECEIVED,
         AudioInputProcessorObserverInterface::State::IDLE,
         true);
 }
@@ -2768,9 +2810,9 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamProtocolErro
  * recognize event stream has not been sent due to an internal error on the server which sends code 500.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamServerInternalError) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::SERVER_INTERNAL_ERROR_V2,
-        StopCaptureDirectiveSchedule::BEFORE_EVENT_STREAM_CLOSE,
+        StopCaptureDirectiveSchedule::BEFORE_RESPONSE_STATUS_RECEIVED,
         AudioInputProcessorObserverInterface::State::IDLE,
         true);
 }
@@ -2780,9 +2822,9 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamServerIntern
  * recognize event stream has not been sent due to server refusing the request.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamRefused) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::REFUSED,
-        StopCaptureDirectiveSchedule::BEFORE_EVENT_STREAM_CLOSE,
+        StopCaptureDirectiveSchedule::BEFORE_RESPONSE_STATUS_RECEIVED,
         AudioInputProcessorObserverInterface::State::IDLE,
         true);
 }
@@ -2792,9 +2834,9 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamRefused) {
  * recognize event stream has not been sent due to server canceling it before the transmission completed.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamCanceled) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::CANCELED,
-        StopCaptureDirectiveSchedule::BEFORE_EVENT_STREAM_CLOSE,
+        StopCaptureDirectiveSchedule::BEFORE_RESPONSE_STATUS_RECEIVED,
         AudioInputProcessorObserverInterface::State::IDLE,
         true);
 }
@@ -2804,9 +2846,9 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamCanceled) {
  * recognize event stream has not been sent due to excessive load on the server.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamThrottled) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::THROTTLED,
-        StopCaptureDirectiveSchedule::BEFORE_EVENT_STREAM_CLOSE,
+        StopCaptureDirectiveSchedule::BEFORE_RESPONSE_STATUS_RECEIVED,
         AudioInputProcessorObserverInterface::State::IDLE,
         true);
 }
@@ -2816,9 +2858,9 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamThrottled) {
  * recognize event stream has not been sent due to the access credentials provided to ACL were invalid.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamInvalidAuth) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::INVALID_AUTH,
-        StopCaptureDirectiveSchedule::BEFORE_EVENT_STREAM_CLOSE,
+        StopCaptureDirectiveSchedule::BEFORE_RESPONSE_STATUS_RECEIVED,
         AudioInputProcessorObserverInterface::State::IDLE,
         true);
 }
@@ -2828,9 +2870,9 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamInvalidAuth)
  * recognize event stream has not been sent due to invalid request sent by the user.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamBadRequest) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::BAD_REQUEST,
-        StopCaptureDirectiveSchedule::BEFORE_EVENT_STREAM_CLOSE,
+        StopCaptureDirectiveSchedule::BEFORE_RESPONSE_STATUS_RECEIVED,
         AudioInputProcessorObserverInterface::State::IDLE,
         true);
 }
@@ -2840,11 +2882,24 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamBadRequest) 
  * recognize event stream has not been sent due to unknown server error.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamUnknownServerError) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::SERVER_OTHER_ERROR,
-        StopCaptureDirectiveSchedule::BEFORE_EVENT_STREAM_CLOSE,
+        StopCaptureDirectiveSchedule::BEFORE_RESPONSE_STATUS_RECEIVED,
         AudioInputProcessorObserverInterface::State::IDLE,
         true);
+}
+
+/**
+ * This function verifies that @c AudioInputProcessor state is correct after the recognize event stream has received
+ * SUCCESS but is not yet closed and a stop capture directive has been received.
+ */
+TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamSuccessAndDirectiveBeforeClose) {
+    testAIPStateTransitionOnEventResponse(
+        avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::SUCCESS,
+        StopCaptureDirectiveSchedule::AFTER_RESPONSE_CODE_RECEIVED,
+        AudioInputProcessorObserverInterface::State::BUSY,
+        false,
+        false);
 }
 
 /**
@@ -2852,11 +2907,11 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnDirectiveAndStreamUnknownServe
  * successfully sent and a stop capture directive is received.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamSuccessAndDirective) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::SUCCESS,
         StopCaptureDirectiveSchedule::AFTER_EVENT_STREAM_CLOSE,
-        AudioInputProcessorObserverInterface::State::BUSY,
-        false);
+        AudioInputProcessorObserverInterface::State::IDLE,
+        true);
 }
 
 /**
@@ -2864,7 +2919,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamSuccessAndDirective) {
  * successfully sent but received no HTTP/2 content and a stop capture directive is received.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamSuccessNoContentAndDirective) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::SUCCESS_NO_CONTENT,
         StopCaptureDirectiveSchedule::AFTER_EVENT_STREAM_CLOSE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2876,7 +2931,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamSuccessNoContentAndDirec
  * been sent due to connection to AVS has been severed and a stop capture directive is received.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamSuccessNotConnectedAndDirective) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::NOT_CONNECTED,
         StopCaptureDirectiveSchedule::AFTER_EVENT_STREAM_CLOSE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2888,7 +2943,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamSuccessNotConnectedAndDi
  * been sent due to AVS is not synchronized and a stop capture directive is received.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamNotSynchronizedAndDirective) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::NOT_SYNCHRONIZED,
         StopCaptureDirectiveSchedule::AFTER_EVENT_STREAM_CLOSE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2900,7 +2955,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamNotSynchronizedAndDirect
  * been sent due to an internal error within ACL and a stop capture directive is received.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamInternalrrorAndDirective) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::INTERNAL_ERROR,
         StopCaptureDirectiveSchedule::AFTER_EVENT_STREAM_CLOSE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2912,7 +2967,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamInternalrrorAndDirective
  * been sent due to an underlying protocol error and a stop capture directive is received.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamProtocolErrorAndDirective) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::PROTOCOL_ERROR,
         StopCaptureDirectiveSchedule::AFTER_EVENT_STREAM_CLOSE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2924,7 +2979,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamProtocolErrorAndDirectiv
  * been sent due to an internal error on the server which sends code 500  and a stop capture directive is received.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamServerInternalErrorAndDirective) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::SERVER_INTERNAL_ERROR_V2,
         StopCaptureDirectiveSchedule::AFTER_EVENT_STREAM_CLOSE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2936,7 +2991,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamServerInternalErrorAndDi
  * been sent due to server refusing the request and a stop capture directive is received.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamRefusedAndDirective) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::REFUSED,
         StopCaptureDirectiveSchedule::AFTER_EVENT_STREAM_CLOSE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2948,7 +3003,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamRefusedAndDirective) {
  * been sent due to server canceling it before the transmission completed and a stop capture directive is received.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamCanceledAndDirective) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::CANCELED,
         StopCaptureDirectiveSchedule::AFTER_EVENT_STREAM_CLOSE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2960,7 +3015,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamCanceledAndDirective) {
  * been sent due to excessive load on the server and a stop capture directive is received.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamThrottledAndDirective) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::THROTTLED,
         StopCaptureDirectiveSchedule::AFTER_EVENT_STREAM_CLOSE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2972,7 +3027,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamThrottledAndDirective) {
  * been sent due to the access credentials provided to ACL were invalid and a stop capture directive is received.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamInvalidAuthAndDirective) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::INVALID_AUTH,
         StopCaptureDirectiveSchedule::AFTER_EVENT_STREAM_CLOSE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2984,7 +3039,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamInvalidAuthAndDirective)
  * been sent due to invalid request sent by the user and a stop capture directive is received.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamBadRequestAndDirective) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::BAD_REQUEST,
         StopCaptureDirectiveSchedule::AFTER_EVENT_STREAM_CLOSE,
         AudioInputProcessorObserverInterface::State::IDLE,
@@ -2996,7 +3051,7 @@ TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamBadRequestAndDirective) 
  * been sent due to unknown server error and a stop capture directive is received.
  */
 TEST_F(AudioInputProcessorTest, test_stopCaptureOnStreamUnknownServerErrorAndDirective) {
-    testAIPStateTransitionOnEventFinish(
+    testAIPStateTransitionOnEventResponse(
         avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status::SERVER_OTHER_ERROR,
         StopCaptureDirectiveSchedule::AFTER_EVENT_STREAM_CLOSE,
         AudioInputProcessorObserverInterface::State::IDLE,

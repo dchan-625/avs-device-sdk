@@ -97,6 +97,10 @@ public:
      */
     virtual std::string getDialogRequestId() = 0;
 
+    virtual void setIsDialogRequestOnline(bool isOnline) = 0;
+
+    virtual bool isDialogRequestOnline() = 0;
+
     /**
      * Sequence the handling of an @c AVSDirective.  The actual handling is done by whichever @c DirectiveHandler
      * is associated with the most specific routing rule.

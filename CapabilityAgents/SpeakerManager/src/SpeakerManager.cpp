@@ -18,6 +18,7 @@
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 #include <rapidjson/error/en.h>
+#include <sstream>
 
 #include <acsdkManufactory/Annotated.h>
 #include <acsdkShutdownManagerInterfaces/ShutdownNotifierInterface.h>
@@ -91,6 +92,18 @@ static bool withinBounds(T value, T min, T max) {
         return false;
     }
     return true;
+}
+
+/**
+ * Converts the @c SpeakerManagerObserverInterface::Source to a string.
+ *
+ * @param source The input @c SpeakerManagerObserverInterface::Source.
+ * @return The @c String representing the source.
+ */
+static inline std::string getSourceString(SpeakerManagerObserverInterface::Source source) {
+    std::stringstream ss;
+    ss << source;
+    return ss.str();
 }
 
 /**
@@ -648,6 +661,8 @@ bool SpeakerManager::executeSetVolume(
         submitMetric(m_metricRecorder, "setVolumeZero", 1);
     }
 
+    submitMetric(m_metricRecorder, "setVolumeSource_" + getSourceString(properties.source), 1);
+
     auto adjustedVolume = volume;
 
     auto maximumVolumeLimit = getMaximumVolumeLimit();
@@ -765,6 +780,7 @@ bool SpeakerManager::executeAdjustVolume(
     }
 
     submitMetric(m_metricRecorder, "adjustVolume", 1);
+    submitMetric(m_metricRecorder, "adjustVolumeSource_" + getSourceString(properties.source), 1);
     SpeakerInterface::SpeakerSettings settings;
     if (!executeGetSpeakerSettings(type, &settings)) {
         ACSDK_ERROR(LX("executeAdjustVolumeFailed").d("reason", "speakerSettingsInconsistent"));
@@ -897,6 +913,12 @@ bool SpeakerManager::executeSetMute(
     if (!validateSpeakerSettingsConsistency(type, &settings)) {
         ACSDK_ERROR(LX("executeSetMute").d("reason", "speakerSettingsInconsistent"));
         return false;
+    }
+    settings.mute = mute;
+    if (mute) {
+        submitMetric(m_metricRecorder, "setMuteSource_" + getSourceString(properties.source), 1);
+    } else {
+        submitMetric(m_metricRecorder, "setUnMuteSource_" + getSourceString(properties.source), 1);
     }
 
     ACSDK_DEBUG(LX("executeSetMuteSuccess").d("mute", mute));

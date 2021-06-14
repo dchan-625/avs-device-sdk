@@ -134,6 +134,13 @@ public:
     std::shared_ptr<NamedReader> getAttachmentReader(size_t index);
 
     /**
+     * Called when the Response code is received.
+     *
+     * @param status The status of the response that was received.
+     */
+    virtual void responseStatusReceived(avsCommon::sdkInterfaces::MessageRequestObserverInterface::Status status);
+
+    /**
      * This is called once the send request has completed.  The status parameter indicates success or failure.
      * @param status Whether the send request succeeded or failed.
      */

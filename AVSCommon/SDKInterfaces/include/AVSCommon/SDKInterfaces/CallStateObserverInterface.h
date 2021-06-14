@@ -41,17 +41,30 @@ public:
         NONE
     };
 
+    /// Information about the call to display on screen-based devices when the observer is notified of a call state change.
+    struct CallDisplayInfo {
+        /// The contact name to be displayed.
+        std::string displayName;
+        /// Information about the endpoint of the contact (work/mobile/home etc.).
+        std::string endpointLabel;
+        /// Contains name of callee for whom incoming call is intended. This field is not populated for Alexa/Skype calls currently.
+        std::string inboundCalleeName;
+        /// Textual description of exact call provider type (e.g. "Alexa Call", "Skype Call" etc.).
+        std::string callProviderType;
+    };
+
     /**
      * Destructor
      */
     virtual ~CallStateObserverInterface() = default;
 
     /**
-     * Allows the observer to react to a change in call state.
+     * Allows the observer to react to a change in call state with display info for the call.
      *
      * @param state The new CallState.
+     * @param displayInfo Information to be used for display on screen-based devices.
      */
-    virtual void onCallStateChange(CallState state) = 0;
+    virtual void onCallStateChange(CallState state, const CallDisplayInfo& displayInfo) = 0;
 
     /**
      * Checks the state of the provided call state to determine if a call is in an "active" state

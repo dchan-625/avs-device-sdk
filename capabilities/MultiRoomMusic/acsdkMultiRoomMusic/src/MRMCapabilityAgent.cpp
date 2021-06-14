@@ -240,9 +240,9 @@ void MRMCapabilityAgent::onSpeakerSettingsChanged(
     m_executor.submit([this, type]() { executeOnSpeakerSettingsChanged(type); });
 }
 
-void MRMCapabilityAgent::onCallStateChange(avsCommon::sdkInterfaces::CallStateObserverInterface::CallState callState) {
+void MRMCapabilityAgent::onCallStateChange(avsCommon::sdkInterfaces::CallStateObserverInterface::CallState callState, const CallDisplayInfo& displayInfo) {
     ACSDK_DEBUG5(LX(__func__).d("callState", callState));
-    m_executor.submit([this, callState]() { executeOnCallStateChange(callState); });
+    m_executor.submit([this, callState, displayInfo]() { executeOnCallStateChange(callState, displayInfo); });
 }
 
 void MRMCapabilityAgent::onDialogUXStateChanged(
@@ -305,7 +305,7 @@ void MRMCapabilityAgent::executeOnUserInactivityReportSent() {
 }
 
 void MRMCapabilityAgent::executeOnCallStateChange(
-    const avsCommon::sdkInterfaces::CallStateObserverInterface::CallState callState) {
+    const avsCommon::sdkInterfaces::CallStateObserverInterface::CallState callState, const avsCommon::sdkInterfaces::CallStateObserverInterface::CallDisplayInfo& displayInfo) {
     ACSDK_DEBUG5(LX(__func__));
     bool isCurrentlyActive = CallStateObserverInterface::isStateActive(callState);
 

@@ -36,7 +36,7 @@ Logger::Logger(Level level) : m_level{level} {
 
 void Logger::log(Level level, const LogEntry& entry) {
     if (shouldLog(level)) {
-        emit(level, std::chrono::system_clock::now(), ThreadMoniker::getThisThreadMoniker().c_str(), entry.c_str());
+        emit(level, std::chrono::system_clock::now(), ThreadMoniker::getThisThreadMoniker(), entry.c_str());
     }
 }
 

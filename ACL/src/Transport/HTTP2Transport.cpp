@@ -19,6 +19,8 @@
 #include <AVSCommon/Utils/Error/FinallyGuard.h>
 #include <AVSCommon/Utils/HTTP2/HTTP2MimeRequestEncoder.h>
 #include <AVSCommon/Utils/Logger/Logger.h>
+#include <AVSCommon/Utils/Metrics/MetricEventBuilder.h>
+#include <AVSCommon/Utils/Metrics/DataPointCounterBuilder.h>
 #include <AVSCommon/Utils/Power/PowerMonitor.h>
 #include <ACL/Transport/PostConnectInterface.h>
 
@@ -37,6 +39,7 @@ using namespace avsCommon::avs;
 using namespace avsCommon::avs::attachment;
 using namespace avsCommon::utils::error;
 using namespace avsCommon::utils::http2;
+using namespace avsCommon::utils::metrics;
 using namespace avsCommon::utils::power;
 
 /// String to identify log entries originating from this file.
@@ -69,6 +72,48 @@ static std::chrono::minutes INACTIVITY_TIMEOUT{5};
 
 /// Max time a @c MessageRequest should linger unprocessed before it should be consider TIMEDOUT.
 static const std::chrono::seconds MESSAGE_QUEUE_TIMEOUT = std::chrono::seconds(15);
+
+/// Prefix used to identify metrics published by this module.
+static const std::string HTTP2TRANSPORT_METRIC_SOURCE_PREFIX = "HTTP2TRANSPORT-";
+
+/// Metric identifier for message send error.
+static const std::string MESSAGE_SEND_ERROR = "ERROR.MESSAGE_SEND_FAILED";
+
+/**
+ * Capture metric for cases where there are internal message send errors or timeouts.
+ *
+ * @param metricRecorder The metric recorder object.
+ * @param status The @c MessageRequestObserverInterface::Status of the message.
+ */
+static void submitMessageSendErrorMetric(
+    const std::shared_ptr<MetricRecorderInterface>& metricRecorder,
+    MessageRequestObserverInterface::Status status) {
+    if (!metricRecorder) {
+        return;
+    }
+
+    std::stringstream ss;
+    switch (status) {
+        case MessageRequestObserverInterface::Status::INTERNAL_ERROR:
+        case MessageRequestObserverInterface::Status::TIMEDOUT:
+            ss << status;
+            break;
+        default:
+            return;
+    }
+
+    auto metricEvent = MetricEventBuilder{}
+                           .setActivityName(HTTP2TRANSPORT_METRIC_SOURCE_PREFIX + MESSAGE_SEND_ERROR)
+                           .addDataPoint(DataPointCounterBuilder{}.setName(ss.str()).increment(1).build())
+                           .build();
+
+    if (!metricEvent) {
+        ACSDK_ERROR(LX("submitErrorMetricFailed").d("reason", "invalid metric event"));
+        return;
+    }
+
+    recordMetric(metricRecorder, metricEvent);
+}
 
 /**
  * Write a @c HTTP2Transport::State value to an @c ostream as a string.
@@ -638,8 +683,8 @@ HTTP2Transport::State HTTP2Transport::handleConnecting() {
         return m_state;
     }
 
-    auto downchannelHandler =
-        DownchannelHandler::create(shared_from_this(), authToken, m_messageConsumer, m_attachmentManager);
+    auto downchannelHandler = DownchannelHandler::create(
+        shared_from_this(), authToken, m_messageConsumer, m_attachmentManager, m_metricRecorder);
 
     if (!downchannelHandler) {
         ACSDK_ERROR(LX_P("handleConnectingFailed").d("reason", "createDownchannelHandlerFailed"));
@@ -747,7 +792,9 @@ HTTP2Transport::State HTTP2Transport::monitorSharedQueueWhileWaiting(
             }
 
             auto request = m_sharedRequestQueue->dequeueOldestRequest();
-            request->sendCompleted(MessageRequestObserverInterface::Status::TIMEDOUT);
+            auto status = MessageRequestObserverInterface::Status::TIMEDOUT;
+            request->sendCompleted(status);
+            submitMessageSendErrorMetric(m_metricRecorder, status);
         }
 
         auto messageRequestTime = m_sharedRequestQueue->peekRequestTime();
@@ -811,7 +858,9 @@ HTTP2Transport::State HTTP2Transport::sendMessagesAndPings(
                     m_eventTracer,
                     m_requestActivityPowerResource);
                 if (!handler) {
-                    messageRequest->sendCompleted(MessageRequestObserverInterface::Status::INTERNAL_ERROR);
+                    auto status = MessageRequestObserverInterface::Status::INTERNAL_ERROR;
+                    messageRequest->sendCompleted(status);
+                    submitMessageSendErrorMetric(m_metricRecorder, status);
                 }
             } else {
                 ACSDK_ERROR(LX_P("failedToCreateMessageHandler").d("reason", "invalidAuth"));

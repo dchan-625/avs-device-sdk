@@ -1197,8 +1197,8 @@ void SpeechSynthesizer::sendEvent(const std::string& eventName, const std::strin
             "}"
         "}";
 
-     ACSDK_ERROR(LX("SpeechSynthesizer::sendEvent").d("event", eventName).d("payload", payload));
-    auto msgIdAndJsonEvent = buildJsonEventString(eventName, "", payload);
+     ACSDK_ERROR(LX("SpeechSynthesizer::sendEvent").d("event", eventName).d("payload", PLAY_PAYLOAD_TEST));
+    auto msgIdAndJsonEvent = buildJsonEventString(eventName, "", PLAY_PAYLOAD_TEST);
  
     auto request = std::make_shared<MessageRequest>(msgIdAndJsonEvent.second);
     m_messageSender->sendMessage(request);

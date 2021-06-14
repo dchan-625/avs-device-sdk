@@ -1184,22 +1184,22 @@ void SpeechSynthesizer::sendEvent(const std::string& eventName, const std::strin
         ACSDK_ERROR(LX("sendEventFailed").d("event", eventName).d("token", m_currentInfo->token));
         return;
     }
-    ACSDK_ERROR(LX("SpeechSynthesizer::sendEvent").d("event", eventName).d("payload", payload));
+    // ACSDK_ERROR(LX("SpeechSynthesizer::sendEvent").d("event", eventName).d("payload", payload));
 
-    const std::string PLAY_PAYLOAD_TEST =
-        "{"
-            "\"playBehavior\":\"" + "ENQUEUE" + "\","
-            "\"url\":" + "cid:e7e5d2e5-1dc1-4448-bea6-998151d8e960_830380263" + ","
-            "\"format\":\"" + "AUDIO_MPEG" + "\","
-            "\"token\":\"" + "amzn1.as-ct.v1.Domain:Application:NotificationsV4#ACRI#e7e5d2e5-1dc1-4448-bea6-998151d8e960" + "\","
-             "\"caption\": {"
-                "\"content\":\"" + "WEBVTT\\n\\n1\\n00:00.000 --> 00:00.773\\nIt's 4:25 PM. Hello Hello Hello" + "\","
-                "\"type\":\"WEBVTT\""
-            "},"
-        "}";
+    // const std::string PLAY_PAYLOAD_TEST =
+    //     "{"
+    //         "\"playBehavior\":\"" + "ENQUEUE" + "\","
+    //         "\"url\":" + "cid:e7e5d2e5-1dc1-4448-bea6-998151d8e960_830380263" + ","
+    //         "\"format\":\"" + "AUDIO_MPEG" + "\","
+    //         "\"token\":\"" + "amzn1.as-ct.v1.Domain:Application:NotificationsV4#ACRI#e7e5d2e5-1dc1-4448-bea6-998151d8e960" + "\","
+    //          "\"caption\": {"
+    //             "\"content\":\"" + "WEBVTT\\n\\n1\\n00:00.000 --> 00:00.773\\nIt's 4:25 PM. Hello Hello Hello" + "\","
+    //             "\"type\":\"WEBVTT\""
+    //         "}"
+    //     "}";
 
-    ACSDK_ERROR(LX("SpeechSynthesizer::sendEvent").d("event", eventName).d("payload", PLAY_PAYLOAD_TEST));
-    auto msgIdAndJsonEvent = buildJsonEventString(eventName, "", PLAY_PAYLOAD_TEST);
+     ACSDK_ERROR(LX("SpeechSynthesizer::sendEvent").d("event", eventName).d("payload", payload));
+    auto msgIdAndJsonEvent = buildJsonEventString(eventName, "", payload);
  
     auto request = std::make_shared<MessageRequest>(msgIdAndJsonEvent.second);
     m_messageSender->sendMessage(request);
